@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="theme-color" content="#f6ead8">
+<title>Hamster Home — Test Mode</title>
+<style>
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#e7ded2}iframe{display:block;width:100%;height:100%;border:0}
+</style>
+</head>
+<body>
+<iframe id="game" title="Hamster Home test mode"></iframe>
+<script>
+const KEY='hamster-home-v5';
+let state={};
+try{state=JSON.parse(localStorage.getItem(KEY)||'{}')||{}}catch(e){}
+state={...state,coins:999999,gems:9999,food:100,water:100,happy:100};
+localStorage.setItem(KEY,JSON.stringify(state));
+document.getElementById('game').src='v5.html?testwallet=1';
+</script>
+</body>
+</html>
