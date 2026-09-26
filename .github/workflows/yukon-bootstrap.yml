@@ -1,0 +1,112 @@
+name: Yukon Pinning Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/yukon-bootstrap.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Generate ephemeral handoff key
+        shell: bash
+        run: |
+          set -euo pipefail
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out /tmp/yukon-private.pem
+          openssl pkey -in /tmp/yukon-private.pem -pubout -out yukon-public.pem
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add yukon-public.pem
+          git commit -m "chore: publish ephemeral Yukon handoff key"
+          git push origin HEAD:main
+
+      - name: Wait for encrypted Yukon token
+        shell: bash
+        run: |
+          set -euo pipefail
+          found=0
+          for i in $(seq 1 180); do
+            git fetch --quiet origin main
+            if git show origin/main:yukon-token.enc > /tmp/yukon-token.enc 2>/dev/null && [ -s /tmp/yukon-token.enc ]; then
+              found=1
+              break
+            fi
+            sleep 5
+          done
+          test "$found" = "1"
+          base64 -d /tmp/yukon-token.enc > /tmp/yukon-token.bin
+          openssl pkeyutl -decrypt             -inkey /tmp/yukon-private.pem             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256             -in /tmp/yukon-token.bin             -out /tmp/yukon-token.txt
+          chmod 600 /tmp/yukon-token.txt
+
+      - name: Install and configure Yukon
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://api.yukon.org/yukon/install.sh | sh
+          export PATH="$HOME/.local/bin:$PATH"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          yukon trace off
+          yukon config --telemetry disabled
+          yukon login "$(cat /tmp/yukon-token.txt)"
+          rm -f /tmp/yukon-token.txt /tmp/yukon-token.bin /tmp/yukon-token.enc
+          yukon install-skill || true
+          yukon skill > /tmp/yukon-skill-installed.txt
+
+      - name: Clone Pinning track, inspect, setup, and run baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.local/bin:$PATH"
+          mkdir -p /tmp/qsb-work
+          cd /tmp/qsb-work
+          yukon clone eigenlabs/quantum-safe-bitcoin-challenge/pinning 2>&1 | tee /tmp/yukon-clone.log
+
+          workdir="$(awk '/^[[:space:]]*cd[[:space:]]+/ {sub(/^[[:space:]]*cd[[:space:]]+/, ""); print; exit}' /tmp/yukon-clone.log)"
+          if [ -z "$workdir" ] || [ ! -d "$workdir" ]; then
+            workdir="$(find /tmp/qsb-work -mindepth 1 -maxdepth 1 -type d | head -n 1)"
+          fi
+          test -n "$workdir"
+          cd "$workdir"
+          pwd | tee /tmp/yukon-workdir.txt
+
+          yukon skill > /tmp/yukon-skill-in-repo.txt
+
+          {
+            echo "=== candidates/pinning BEFORE ANY CODE CHANGES ==="
+            find candidates/pinning -maxdepth 2 -type f -print | sort
+            echo
+            while IFS= read -r f; do
+              echo "===== $f ====="
+              sed -n '1,240p' "$f"
+              echo
+            done < <(find candidates/pinning -maxdepth 2 -type f -print | sort)
+          } > /tmp/pinning-inspection.txt
+
+          yukon setup --track pinning 2>&1 | tee /tmp/yukon-setup.log
+          yukon run --track pinning 2>&1 | tee /tmp/yukon-baseline.log
+          git status --short > /tmp/yukon-git-status.txt
+
+      - name: Upload Yukon bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yukon-pinning-bootstrap
+          path: |
+            /tmp/yukon-clone.log
+            /tmp/yukon-workdir.txt
+            /tmp/yukon-skill-installed.txt
+            /tmp/yukon-skill-in-repo.txt
+            /tmp/pinning-inspection.txt
+            /tmp/yukon-setup.log
+            /tmp/yukon-baseline.log
+            /tmp/yukon-git-status.txt
+          if-no-files-found: warn
