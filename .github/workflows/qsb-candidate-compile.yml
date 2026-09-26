@@ -1,0 +1,38 @@
+name: QSB candidate compile
+
+on:
+  push:
+    branches: [qsb-199-sha-composite-0926]
+  workflow_dispatch:
+
+jobs:
+  compile:
+    runs-on: ubuntu-latest
+    container:
+      image: nvidia/cuda:12.8.1-devel-ubuntu24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install host dependencies
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates libssl-dev build-essential
+
+      - name: Fetch exact PR 1809 head
+        run: |
+          git clone https://github.com/Layr-Labs/quantum-safe-bitcoin-challenge.git /tmp/qsb
+          cd /tmp/qsb
+          git checkout 6b3aaf610dbafc2d1269eb7becd62b18303f5858
+
+      - name: Overlay composite candidate
+        run: |
+          cp "$GITHUB_WORKSPACE/qsb-199-candidate/candidates/pinning/cpu_cogrind.h" /tmp/qsb/candidates/pinning/cpu_cogrind.h
+          cp "$GITHUB_WORKSPACE/qsb-199-candidate/candidates/pinning/cg_sha.h" /tmp/qsb/candidates/pinning/cg_sha.h
+
+      - name: Compile with challenge contract
+        run: |
+          cd /tmp/qsb
+          nvcc --version
+          nvcc -O3 -DQSB_ZEROS_N=24 -o pinning candidates/pinning/pinning.cu -lcrypto -lm
+          test -x pinning
+          ls -lh pinning
