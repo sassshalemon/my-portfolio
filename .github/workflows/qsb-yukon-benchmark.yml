@@ -1,0 +1,67 @@
+name: QSB Yukon benchmark
+
+on:
+  push:
+    branches: [qsb-199-sha-composite-0926]
+  workflow_dispatch:
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    env:
+      YUKON_API_TOKEN: ${{ secrets.YUKON_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require private Yukon token
+        shell: bash
+        run: |
+          if [ -z "$YUKON_API_TOKEN" ]; then
+            echo "YUKON_API_TOKEN repository secret is not configured."
+            exit 42
+          fi
+
+      - name: Install Yukon CLI privately
+        shell: bash
+        env:
+          YUKON_INSTALL_SKILL: "0"
+        run: |
+          curl -fsSL https://api.yukon.org/yukon/install.sh | sh
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          "$HOME/.local/bin/yukon" --help >/dev/null
+
+      - name: Disable trace and telemetry
+        shell: bash
+        run: |
+          yukon trace off
+          yukon config --telemetry disabled
+          yukon submissions --json >/tmp/yukon-access.json
+
+      - name: Clone Yukon-linked pinning track
+        shell: bash
+        run: |
+          rm -rf "$RUNNER_TEMP/qsb-pinning"
+          cd "$RUNNER_TEMP"
+          yukon clone eigenlabs/quantum-safe-bitcoin-challenge/pinning qsb-pinning
+          test -d qsb-pinning
+
+      - name: Overlay compiled candidate
+        shell: bash
+        run: |
+          cp "$GITHUB_WORKSPACE/qsb-199-candidate/candidates/pinning/cpu_cogrind.h" "$RUNNER_TEMP/qsb-pinning/candidates/pinning/cpu_cogrind.h"
+          cp "$GITHUB_WORKSPACE/qsb-199-candidate/candidates/pinning/cg_sha.h" "$RUNNER_TEMP/qsb-pinning/candidates/pinning/cg_sha.h"
+
+      - name: Run remote Yukon benchmark only
+        shell: bash
+        run: |
+          cd "$RUNNER_TEMP/qsb-pinning"
+          yukon run --track pinning 2>&1 | tee "$GITHUB_WORKSPACE/qsb-yukon-run.txt"
+
+      - name: Upload benchmark receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qsb-yukon-benchmark-receipt
+          path: |
+            qsb-yukon-run.txt
+          if-no-files-found: ignore
