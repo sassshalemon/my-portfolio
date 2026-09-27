@@ -16,12 +16,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Register persistent Superteam agent
+      - name: Register and encrypt API key
         shell: bash
+        env:
+          SUPERTEAM_PUBLIC_KEY_B64: "LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQm9qQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FZOEFNSUlCaWdLQ0FZRUF4YUU0T1hrNGlxUUwzUlFFKzREKwpLRXR1bXUzZXFpVzMzdzFlYzBaVzdkcndRM2pOaGQ0NEFyaEx5aFhyTkdVVXowbGtSREVmNlVvemcva3B6djIwCkhpVVJGamdBUXViYXdHQkh0d2dPVHM3T0pKd0V4ZHRWQm1mOG9PdkFLRUl4T2pwZU5nd3pOZllhU2I1WVhVa20KNnhHaE5GWjBCVndoTXNEOUw4dFlxVW9zaHg1eXQ3blYxdHdua3ZFdllyWmhWNWFWb3FhNWlUT2dubHlhVWZFbgozZ1NReldOcXh1U2oraFVUYlBFQjhMdmVnUFJhV1dWMHo1STNMMWpYNVo0YmJsQ0xtVzB6aHZTRHdma2ZYSkFsCkZuZDZCdmc2OUx1Nk1JdXJRbkd6dWNDTHVZblBKU1k1MGdFWkZXNnVBWVF2eGlacVoyZ3Z4TENJbVZRRTliRTYKRVZWYXJNcjF4UHhiWXhqRnpmOFl0OUJna2FsNCtGckZydTBYMHFMY2JuOGFSamlhcUFXK1BQV3JaMDlNSVpsVwpFcVJWZHBBODAvUUoxMlZobzJ6L2N4SElxRFM5Yzd6Smp6S203T1VMNFBTUXBRRzZPMnpsSnRmYWJrbFJ4cFNWClhlZmdHNjBsMnJXaDJwRnZPUlBOTkViL2xlbG1tNHBhMjE3YUtrTUt5T08zQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg=="
         run: |
           set -euo pipefail
 
-          response="$(curl -fsS -X POST 'https://superteam.fun/api/agents'             -H 'Content-Type: application/json'             --data '{"name":"LumaSocialWorker"}')"
+          response="$(curl -fsS -X POST "https://superteam.fun/api/agents"             -H "Content-Type: application/json"             --data '{"name":"LumaSocialWorker"}')"
 
           api_key="$(printf '%s' "$response" | jq -r '.apiKey')"
           agent_id="$(printf '%s' "$response" | jq -r '.agentId')"
@@ -32,29 +34,17 @@ jobs:
           test "$api_key" != "null"
           echo "::add-mask::$api_key"
 
-          cat > /tmp/superteam-public.pem <<'PEM'
------BEGIN PUBLIC KEY-----
-MIIBojANBgkqhkiG9w0BAQEFAAOCAY8AMIIBigKCAYEAxaE4OXk4iqQL3RQE+4D+
-KEtumu3eqiW33w1ec0ZW7drwQ3jNhd44ArhLyhXrNGUUz0lkRDEf6Uozg/kpzv20
-HiURFjgAQubawGBHtwgOTs7OJJwExdtVBmf8oOvAKEIxOjpeNgwzNfYaSb5YXUkm
-6xGhNFZ0BVwhMsD9L8tYqUoshx5yt7nV1twnkvEvYrZhV5aVoqa5iTOgnlyaUfEn
-3gSQzWNqxuSj+hUTbPEB8LvegPRaWWV0z5I3L1jX5Z4bblCLmW0zhvSDwfkfXJAl
-Fnd6Bvg69Lu6MIurQnGzucCLuYnPJSY50gEZFW6uAYQvxiZqZ2gvxLCImVQE9bE6
-EVVarMr1xPxbYxjFzf8Yt9Bgkal4+FrFru0X0qLcbn8aRjiaqAW+PPWrZ09MIZlW
-EqRVdpA80/QJ12Vho2z/cxHIqDS9c7zJjzKm7OUL4PSQpQG6O2zlJtfabklRxpSV
-XefgG60l2rWh2pFvORPNNEb/lelmm4pa217aKkMKyOO3AgMBAAE=
------END PUBLIC KEY-----
-PEM
-
+          printf '%s' "$SUPERTEAM_PUBLIC_KEY_B64" | base64 -d > /tmp/superteam-public.pem
           printf '%s' "$api_key" > /tmp/superteam-api-key.txt
-          openssl pkeyutl -encrypt             -pubin -inkey /tmp/superteam-public.pem             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256             -in /tmp/superteam-api-key.txt             -out /tmp/superteam-api-key.bin
+
+          openssl pkeyutl -encrypt             -pubin             -inkey /tmp/superteam-public.pem             -pkeyopt rsa_padding_mode:oaep             -pkeyopt rsa_oaep_md:sha256             -in /tmp/superteam-api-key.txt             -out /tmp/superteam-api-key.bin
 
           mkdir -p superteam
           base64 -w0 /tmp/superteam-api-key.bin > superteam/agent-api-key.enc
 
           jq -n             --arg agentId "$agent_id"             --arg username "$username"             --arg claimCode "$claim_code"             '{agentId:$agentId,username:$username,claimCode:$claimCode}'             > superteam/persistent-agent-public.json
 
-          curl -fsS 'https://superteam.fun/api/agents/listings/live?take=100'             -H "Authorization: Bearer $api_key"             > superteam/persistent-live-listings.json
+          curl -fsS "https://superteam.fun/api/agents/listings/live?take=100"             -H "Authorization: Bearer $api_key"             > superteam/persistent-live-listings.json
 
           rm -f /tmp/superteam-api-key.txt /tmp/superteam-api-key.bin /tmp/superteam-public.pem
 
