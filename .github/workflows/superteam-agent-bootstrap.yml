@@ -1,0 +1,68 @@
+name: Superteam Agent Bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/superteam-agent-bootstrap.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Register agent and fetch live agent-eligible listings
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS -X POST 'https://superteam.fun/api/agents' \
+            -H 'Content-Type: application/json' \
+            --data '{"name":"LumaSocialAgent"}')"
+
+          api_key="$(printf '%s' "$response" | jq -r '.apiKey')"
+          agent_id="$(printf '%s' "$response" | jq -r '.agentId')"
+          username="$(printf '%s' "$response" | jq -r '.username')"
+          claim_code="$(printf '%s' "$response" | jq -r '.claimCode')"
+
+          test -n "$api_key"
+          test "$api_key" != "null"
+          echo "::add-mask::$api_key"
+
+          mkdir -p superteam
+          jq -n \
+            --arg agentId "$agent_id" \
+            --arg username "$username" \
+            --arg claimCode "$claim_code" \
+            '{agentId:$agentId,username:$username,claimCode:$claimCode}' \
+            > superteam/agent-public.json
+
+          curl -fsS 'https://superteam.fun/api/agents/listings/live?take=100' \
+            -H "Authorization: Bearer $api_key" \
+            > superteam/live-listings.json
+
+          python - <<'PY'
+          import json
+          p='superteam/live-listings.json'
+          d=json.load(open(p))
+          rows=d if isinstance(d,list) else d.get('listings') or d.get('data') or d.get('items') or []
+          print("agent-eligible listings:", len(rows))
+          for x in rows[:100]:
+              print(
+                  x.get('slug') or x.get('id'),
+                  '|', x.get('title') or x.get('name'),
+                  '| access=', x.get('agentAccess'),
+                  '| type=', x.get('type'),
+                  '| reward=', x.get('reward') or x.get('rewards') or x.get('compensation')
+              )
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add superteam/agent-public.json superteam/live-listings.json
+          git commit -m "chore: register Superteam agent and snapshot live listings"
+          git push origin HEAD:main
