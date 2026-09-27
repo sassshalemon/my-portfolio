@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sample Production Content QA — Luma Social</title>
+<meta name="description" content="An anonymized sample of a €100 production-content QA deliverable.">
+<style>
+:root{--bg:#0b1020;--card:#121a30;--text:#f5f7ff;--muted:#a9b2c9;--line:#26324f;--accent:#a9c7ff;--danger:#ffb4a9}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:16px/1.65 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+main{max-width:900px;margin:auto;padding:50px 22px 80px}h1{font-size:clamp(36px,6vw,64px);line-height:1.04;margin:10px 0 18px}h2{margin-top:34px}
+.eyebrow{color:var(--accent);font-weight:800;text-transform:uppercase;letter-spacing:.08em;font-size:13px}
+.lead,.muted{color:var(--muted)}.lead{font-size:20px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:22px;margin:16px 0}
+.badge{display:inline-block;border:1px solid var(--danger);color:var(--danger);border-radius:999px;padding:5px 10px;font-size:13px;font-weight:800}
+code{background:#080d1b;padding:2px 6px;border-radius:6px}.fix{border-left:4px solid var(--accent);padding-left:16px}
+a{color:var(--accent)}ul{padding-left:22px}
+</style>
+</head>
+<body><main>
+<div class="eyebrow">Luma Social · Sample deliverable</div>
+<h1>Production Content QA — anonymized example</h1>
+<p class="lead">This is the level of specificity in the €100 fixed-scope report. The company and URLs below are anonymized; the defects are representative of issues found on live B2B sites.</p>
+
+<div class="card">
+<span class="badge">P0 · Trust / conversion</span>
+<h2>Unresolved template copy in the demo path</h2>
+<p><strong>Observed:</strong> a shared conversion component renders <code>This is some text inside of a div block.</code> beside a demo form on multiple buyer-facing pages.</p>
+<p><strong>Why it matters:</strong> the prospect sees unfinished template residue immediately before being asked for business contact details.</p>
+<p><strong>Likely root cause:</strong> one global CMS/Webflow component, so a single component-level fix may clean many pages.</p>
+<div class="fix"><strong>Ship first:</strong> remove the default text element if redundant, or replace it with one approved value proposition. Then crawl the public site for the exact placeholder string after deploy.</div>
+</div>
+
+<div class="card">
+<span class="badge">P0 · Personalization</span>
+<h2>Unresolved CMS token</h2>
+<p><strong>Observed:</strong> <code>The latest from [[first-name]]</code> on public content taxonomy pages.</p>
+<p><strong>Fix:</strong> never render the personalized variant unless a valid name context is guaranteed; use stable fallback copy such as <em>Real customer stories</em>.</p>
+</div>
+
+<div class="card">
+<h2>Acceptance checklist</h2>
+<ul>
+<li>Zero visible instances of the identified placeholder/token strings.</li>
+<li>Desktop + mobile check on every shared component instance.</li>
+<li>Success/error form states display only when triggered.</li>
+<li>CTA destination and form submission remain functional after the content fix.</li>
+<li>Post-deploy public crawl/search confirms the defect class is gone, not just one page.</li>
+</ul>
+</div>
+
+<div class="card">
+<h2>What the paid pack adds</h2>
+<ul>
+<li>Exact affected URLs and reproduced evidence.</li>
+<li>Priority/severity matrix.</li>
+<li>Ready-to-paste replacement copy where appropriate.</li>
+<li>Component/root-cause hypothesis.</li>
+<li>Implementation order and acceptance checks.</li>
+</ul>
+<p class="muted">No production credentials are required for a public-site QA pass. Unsupported business claims are never invented.</p>
+</div>
+
+<p><a href="./">← Back to the €100 QA offer</a></p>
+</main></body></html>
